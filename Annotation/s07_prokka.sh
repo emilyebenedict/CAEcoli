@@ -5,8 +5,7 @@
 # Usage        : sbatch s07_prokka.sh
 # Author       : Luke Diorio-Toth, ldiorio-toth@wustl.edu
 # Version      : 1.4
-# Modified     : Tue Oct 11 14:26:26 CDT 2022
-# Created      : 2024-12-14
+# Created      : Tue Oct 11 14:26:26 CDT 2022
 #===============================================================================
 #Submission script for HTCF
 #SBATCH --time=1-20:00:00 # days-hh:mm:ss
