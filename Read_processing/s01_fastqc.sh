@@ -6,7 +6,6 @@
 # Author       : Erin Newcomer, erin.newcomer@wustl.edu
 # Version      : 1
 # Created On   : 2021_09_23
-# Modified On  : 2024_12_12
 #===============================================================================
 #
 #Submission script for HTCF
