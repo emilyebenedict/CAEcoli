@@ -7,7 +7,6 @@
 # Author       : Luke Diorio-Toth, ldiorio-toth@wustl.edu
 # Version      : 1.4
 # Created On   : 2019_01_08
-# Modified On  : 2024_12_12
 #===============================================================================
 
 #Submission script for HTCF
