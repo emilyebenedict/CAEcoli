@@ -7,7 +7,6 @@
 # Author       : Luke Diorio-Toth
 # Version      : 1.3
 # Created On   : Tue Oct 11 14:49:35 CDT 2022
-# Last Modified: 2024-12-15
 #===============================================================================
 
 #SBATCH --job-name=amrfinder
