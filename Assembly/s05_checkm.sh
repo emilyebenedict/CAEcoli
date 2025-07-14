@@ -7,7 +7,6 @@
 # Author       : Jian Ryou, j.ryou@wustl.edu
 # Version      : 1.0
 # Created On   : Wed Aug 17 17:37:20 CST 2022
-# Last Modified: 2024-12-14
 #===============================================================================
 #
 #Submission script for HTCF
