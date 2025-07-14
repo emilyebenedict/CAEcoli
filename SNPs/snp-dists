@@ -1,0 +1,7 @@
+# This script runs snp-dists to generate pairwise core genome SNPs for all genomes in core_gene_alignment.aln
+
+conda activate ~/conda-envs/snp-sites/
+snp-sites -c -r -m -v -p -o . core_gene_alignment.aln #aln from panaroo
+
+eval $(spack load --sh snp-dists)
+snp-dists -m output.snp_sites.aln > pairwise_core_snps.tsv
