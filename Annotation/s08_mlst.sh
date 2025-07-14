@@ -5,7 +5,7 @@
 # Author       : Erin Newcomer, erin.newcomer@wustl.edu
 # Version      : 1.0
 # Created On   : 2020-06-03
-# Last Modified: Mon July 10 2023; Wes Agee, wagee@wustl.edu
+# Last Modified: 2024-12-14
 #===============================================================================
 #Submission script for HTCF
 #SBATCH --job-name=MLST
