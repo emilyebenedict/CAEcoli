@@ -8,7 +8,6 @@
 # Author       : E. Newcomer,K. Sukhum, L.  Diorio-Toth
 # Version      : 1.0
 # Created On   : 2020-2-5
-# Modified On  : 2024-12-14
 #===============================================================================
 #
 #Submission script for HTCF
