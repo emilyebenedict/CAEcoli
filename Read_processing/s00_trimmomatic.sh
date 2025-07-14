@@ -8,7 +8,6 @@
 # Author       : Luke Diorio-Toth, ldiorio-toth@wustl.edu
 # Version      : 1.3
 # Created On   : 2019_01_08
-# Modified On  : 2024_12_12 
 #===============================================================================
 
 #SBATCH --job-name=trimmomatic
