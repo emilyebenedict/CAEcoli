@@ -1,0 +1,750 @@
+#Network analysis utilizing a 22SNP cutoff for clonality
+new_data <- read.delim("/Users/wesagee/Documents/240103_core_pairwise_dist_CA+HA_tidy.txt")
+assign.networks<-function(snp.dists, snp.cutoff){
+  
+  # Get a list of all samples you're working with
+  samplelist=unique(c(snp.dists$sample1,snp.dists$sample2))
+  
+  # Make a new dataframe to record the netework each sample is in
+  networks<-data.frame(sample=samplelist, network=0)
+  
+  # Start the network number counter at 1, and loop through the whole networks dataframe one sample at a time
+  net_num=1
+  for(i in 1:length(networks$sample)){
+    
+    # Pull out all the distances that involve sample i and are <= the snp cutoff
+    temp.snps=snp.dists[(snp.dists$sample1==networks$sample[i] | snp.dists$sample2==networks$sample[i]) & snp.dists$distance<=snp.cutoff ,]
+    
+    # Pick out all the other samples that are closely related to sample i
+    temp.samples=networks[networks$sample %in% temp.snps$sample1 | networks$sample %in% temp.snps$sample2,]
+    
+    # Find all the previously-assigned networks for the samples that are closely related to sample i, so any samples that were connected to those samples but not sample i are still invluded
+    temp.networks=networks$network[networks$sample %in% temp.samples$sample]
+    # If there are no previously assigned networks, it's fine and we assign the group a new network number. But if there are, we assign all samples to the lowest network 
+    if(sum(temp.networks)!=0){
+      networks$network[networks$network %in% unique(temp.samples$network)]=min(temp.networks)
+    }else{
+      for(j in 1:length(temp.networks)){
+        networks$network[networks$sample %in% temp.samples$sample][j] = net_num
+      }
+      net_num=net_num+1
+    }
+  }
+  # Change all the samples that never got assigned a network to None
+  networks$network[networks$network==0] = "None"
+  return(networks)
+}
+
+network.list=assign.networks(new_data, 22)
+View(network.list)
+write.csv(network.list, "/Users/wesagee/Documents/250212_22snp_network_analysis.csv", row.names = TRUE)
+-----------------------------------------------------------------------------------
+#Figure 2B
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+
+# File path
+file_path <- "/Users/wesagee/Documents/250108_ESBLCiproRe_subset_75.txt"
+
+# Read the data
+data <- read.delim(file_path, header = TRUE, sep = "\t")
+
+# Determine colonization status
+colonization_status <- data %>%
+  group_by(studyID) %>%
+  summarise(
+    distinct_st = n_distinct(st),
+    total_entries = n()
+  ) %>%
+  mutate(
+    status = case_when(
+      distinct_st == 1 & total_entries == 1 ~ "Mono-colonized",
+      distinct_st == 1 & total_entries > 1 ~ "Co-colonized within STs",
+      distinct_st > 1 ~ "Co-colonized across STs"
+    )
+  )
+
+# Count occurrences of each colonization status and calculate percentages
+status_counts <- colonization_status %>%
+  count(status) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+# Create a pie chart with black outlines, bold text, and percentages
+ggplot(status_counts, aes(x = "", y = n, fill = status)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +  # Add black outlines to slices
+  coord_polar("y", start = 0) +
+  labs(
+    title = "Colonization Status of Patients",
+    fill = "Colonization Status"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),   # Bold title
+    legend.title = element_text(size = 14, face = "bold"), # Bold legend title
+    legend.text = element_text(size = 12, face = "bold")   # Bold legend text
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Mono-colonized" = "#1f77b4",
+      "Co-colonized across STs" = "deepskyblue",
+      "Co-colonized within STs" = "#9ECAE1"
+    )
+  ) +
+  geom_text(
+    aes(
+      label = paste0(round(percentage, 1), "%"), 
+      y = cumsum(n) - n / 2  # Position labels at the center of each slice
+    ),
+    color = "black", 
+    size = 5, 
+    fontface = "bold"
+  ) +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1.5)  # Black border around the chart
+  )
+
+--------------------------------------------------------------------
+#Sup Figure 5B
+#Stacked bar plot of ST131 vs nonST131 pangenomes via Panaroo
+# Load required packages
+library(ggplot2)
+library(dplyr)
+
+# Read the data as CSV, assuming tab-separated format
+summary_ST131 <- read.delim("/Users/wesagee/Documents/summary_statistics_EC_genomes_ST131_75.txt", header = FALSE, stringsAsFactors = FALSE)
+summary_nonST131 <- read.delim("/Users/wesagee/Documents/summary_statistics_EC_genomes_nonST131_75.txt", header = FALSE, stringsAsFactors = FALSE)
+
+# Extract gene count data from each file
+extract_data <- function(summary_data) {
+  # Extract the relevant columns for gene counts
+  core_genes <- as.numeric(summary_data[summary_data$V1 == "Core genes", 3])
+  soft_core_genes <- as.numeric(summary_data[summary_data$V1 == "Soft core genes", 3])
+  shell_genes <- as.numeric(summary_data[summary_data$V1 == "Shell genes", 3])
+  cloud_genes <- as.numeric(summary_data[summary_data$V1 == "Cloud genes", 3])
+  total_genes <- as.numeric(summary_data[summary_data$V1 == "Total genes", 3])
+  
+  # Calculate the percentages for each category
+  data.frame(
+    category = c("Core Genes", "Soft Core Genes", "Shell Genes", "Cloud Genes"),
+    gene_count = c(core_genes, soft_core_genes, shell_genes, cloud_genes),
+    percentage = c((core_genes / total_genes) * 100,
+                   (soft_core_genes / total_genes) * 100,
+                   (shell_genes / total_genes) * 100,
+                   (cloud_genes / total_genes) * 100),
+    total_genes = rep(total_genes, 4)  # Add total genes column
+  )
+}
+
+# Extract data for both datasets
+data_ST131 <- extract_data(summary_ST131)
+data_nonST131 <- extract_data(summary_nonST131)
+
+# Rename "Final 66" to "CA"
+data_ST131$dataset <- "ST131"
+data_nonST131$dataset <- "Non-ST131"
+
+# Combine the data frames
+combined_data <- bind_rows(data_ST131, data_nonST131)
+
+# Remove rows where the percentage is zero (i.e., no data)
+combined_data <- combined_data %>% filter(percentage > 0)
+
+# Assign colors to each gene category using specified hex codes
+combined_data$color <- factor(combined_data$category, 
+                              levels = c("Core Genes", "Soft Core Genes", "Shell Genes", "Cloud Genes"),
+                              labels = c("#FF5733", "#33A1FF", "#ffdb3a", "#11a329"))
+
+# Create the stacked bar plot with borders and axis borders
+ggplot(combined_data, aes(x = dataset, y = percentage, fill = color)) +
+  geom_bar(stat = "identity", color = "black", size = 0.5) +  # Add borders around bars
+  scale_fill_identity() +  # Use specified fill colors
+  labs(title = "Gene Category Proportions by Dataset",
+       x = "Dataset",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),  # Bold x-axis text
+        axis.text.y = element_text(face = "bold"),  # Bold y-axis text
+        axis.title.x = element_text(face = "bold"),  # Bold x-axis title
+        axis.title.y = element_text(face = "bold"),  # Bold y-axis title
+        strip.text = element_text(face = "bold"),  # Bold facet label
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        strip.background = element_blank(),  # Clean up grid lines and strip background
+        axis.line.x = element_line(color = "black", size = 1),  # Add black border to x-axis
+        axis.line.y = element_line(color = "black", size = 1)) +  # Add black border to y-axis
+  guides(fill = guide_legend(title = "Gene Categories", 
+                             nrow = 1,  # Display key in a single row
+                             byrow = TRUE,  # Arrange the items horizontally
+                             label.position = "bottom")) +  # Position the legend below
+  # Add the total number of genes at the top of each bar
+  geom_text(data = combined_data, aes(x = dataset, y = 105, label = paste("n =", total_genes)), 
+            size = 4, fontface = "bold", vjust = -0.5)
+
+-----------------------------------------------------------
+# Figure 5A
+#Network Analysis of CA+HA by year with yellow for HA
+# Load necessary libraries
+library(qgraph)
+library(ggplot2)
+library(dplyr)
+library(colorspace)
+library(scales)
+
+
+# File paths
+network_file <- "/Users/wesagee/Documents/CA+HA_sample_origin.txt"
+snp_dist_file <- "/Users/wesagee/Documents/240103_core_pairwise_dist_CA+HA_tidy.txt"
+
+# Read network data
+network.list <- read.delim(network_file, header = TRUE, sep = "\t")
+snp.dists <- read.delim(snp_dist_file, header = TRUE)
+
+# Convert the 'date' column to Date format
+network.list$date <- as.Date(network.list$date, format = "%m/%d/%y")
+
+# Extract the year of collection from the date
+network.list$Year <- format(network.list$date, "%Y")
+
+# Define color palette (deep blue to light cyan)
+color_gradient <- colorRampPalette(c("#051894", "#008dd8", "#d8edf4"))(5)
+
+# Map colors to years
+network.list$Color <- color_gradient[as.numeric(network.list$Year) - 2016]
+
+# Define fill colors:
+# - CA-ESBLe samples: Colored by year
+# - HA-ESBLe samples: Filled with #FFDC64
+fill_colors <- ifelse(network.list$origin == "CA-ESBLe", 
+                      "white",  # Keep CA-ESBLe visually distinct
+                      "#FFDC64")  # HA-ESBLe samples filled with warm yellow
+
+# Define border colors (based on year for all samples)
+border_colors <- network.list$Color  
+
+# Set up adjacency matrix for SNP-based elastic links
+n_samples <- nrow(network.list)
+adj_matrix <- matrix(0, nrow = n_samples, ncol = n_samples)
+rownames(adj_matrix) <- network.list$sample
+colnames(adj_matrix) <- network.list$sample
+
+# Populate adjacency matrix with SNP-based weights
+for (i in 1:nrow(snp.dists)) {
+  sample1 <- snp.dists$sample1[i]
+  sample2 <- snp.dists$sample2[i]
+  distance <- snp.dists$distance[i]
+  
+  if (distance < 22) {
+    weight <- (22 - distance) / 22  # Normalize weights (closer pairs get higher weights)
+    if (sample1 %in% rownames(adj_matrix) & sample2 %in% colnames(adj_matrix)) {
+      adj_matrix[sample1, sample2] <- weight
+      adj_matrix[sample2, sample1] <- weight
+    }
+  }
+}
+
+# Ensure the adjacency matrix is symmetric for undirected graphs
+adj_matrix <- (adj_matrix + t(adj_matrix)) / 2
+
+# **Calculate node size based on degree centrality (number of connections)**
+node_degree <- rowSums(adj_matrix > 0)  # Count connections per node
+
+# **Updated: Reduce node size range to avoid excessive overlap**
+node_sizes <- rescale(node_degree, to = c(2, 3.25))  # Now scaled between 2 and 5
+
+# Scaling factor for edge thickness
+max_width <- 5  # Adjust max width as needed
+edge_widths <- adj_matrix * max_width
+
+# Check for empty matrix before plotting
+if (sum(adj_matrix) > 0) {
+  # Visualize network with elastic links
+  qgraph(
+    adj_matrix,
+    layout = "spring",
+    color = fill_colors[match(rownames(adj_matrix), network.list$sample)],  # Fill color
+    shape = "circle",
+    border.color = border_colors[match(rownames(adj_matrix), network.list$sample)],  # Border color by year
+    border.width = 3,
+    edge.color = "black",
+    edge.width = edge_widths,  # Elastic link model applied here
+    vsize = ,
+    label.cex = 0.7,
+    label.font = 2.5,  # Bold node labels
+    directed = TRUE  # Ensure undirected network
+  )
+} else {
+  message("No valid edges found based on SNP threshold.")
+}
+
+# Add legend with transparent CA-ESBLe
+legend(
+  "bottomleft",
+  legend = c("2017", "2018", "2019", "2020", "2021", "CA-ESBLe", "HA-ESBLe"),
+  col = c(color_gradient, "black", "black"),  
+  pch = c(rep(19, 5), 1, 19),  # '1' for transparent CA-ESBLe, '19' for others
+  pt.bg = c(color_gradient, NA, "#FFDC64"),  # NA for transparent CA-ESBLe
+  pt.cex = c(rep(1, 5), 2, 2),  
+  cex = 0.8,
+  bty = "n",
+  text.font = 2,  
+  box.lwd = 2,  
+  box.col = "black"
+)
+
+----------------------------------------------------------------------
+#Figure 5C
+#ARG counts by isolate source (Stool v Blood v Urine)
+# Load necessary libraries
+  library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+
+# File paths
+amr_file <- "/Users/wesagee/Documents/combined_amrfinder_CA+HA_cleaned_114.txt"
+origin_file <- "/Users/wesagee/Documents/aim2_CA+HA_specimen_origin.xlsx"
+
+# Read in AMRfinder output
+amr_data <- read_tsv(amr_file)
+
+# Read in specimen origin data
+origin_data <- read_excel(origin_file)
+
+# Standardize column names
+colnames(origin_data) <- c("Sample", "Culture")
+
+# Convert Culture to a standardized format (capitalize first letter)
+origin_data$Culture <- tolower(origin_data$Culture)
+origin_data$Culture <- gsub("^blood$", "Blood", origin_data$Culture)
+origin_data$Culture <- gsub("^urine$", "Urine", origin_data$Culture)
+origin_data$Culture <- gsub("^stool$", "Stool", origin_data$Culture)
+
+# Count the number of unique ARGs per sample
+arg_counts <- amr_data %>%
+  group_by(Name) %>%
+  summarise(ARG_count = n_distinct(`Gene symbol`))
+
+# Merge ARG counts with specimen origin data
+merged_data <- merge(arg_counts, origin_data, by.x = "Name", by.y = "Sample")
+
+# Ensure 'Culture' is a factor with specified order
+merged_data$Culture <- factor(merged_data$Culture, levels = c("Stool", "Blood", "Urine"))
+
+# Define color mapping: Blood and Urine in #FFDC64, Stool in #2F397A
+color_mapping <- c("Blood" = "#EE2C2C", "Urine" = "#FFDC64", "Stool" = "#735324")
+
+# Define pairwise comparisons
+comparisons <- list(
+  c("Stool", "Blood"),
+  c("Stool", "Urine"),
+  c("Blood", "Urine")
+)
+
+# Create the box plot with pairwise comparisons
+ggplot(data = merged_data, aes(x = Culture, y = ARG_count, fill = Culture)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "ARG Counts per Sample by Specimen Origin",
+       x = "Specimen Origin",
+       y = "Number of ARGs",
+       fill = "Origin") +
+  scale_fill_manual(values = color_mapping) +
+  stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", bracket.size = 0.5) + # Add p-value bars
+  theme(
+    text = element_text(face = "bold"),       # Bold all text elements
+    axis.title = element_text(face = "bold"), # Bold axis titles
+    axis.text = element_text(face = "bold"),  # Bold axis text
+    panel.grid = element_blank(),             # Remove grid lines
+    panel.border = element_blank(),           # Remove panel border
+    axis.line.x = element_line(color = "black", size = 0.5), # Add x-axis border
+    axis.line.y = element_line(color = "black", size = 0.5)  # Add y-axis border
+  )
+
+----------------------------------------------------------------------------------
+#Figure 5D
+# Violin plot with box plot and p-value annotation for total AMR carriage among CA vs HA-ESBLe
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(readr)       # For reading text files
+library(ggpubr)      # For statistical annotation
+library(ggbeeswarm)  # For beeswarm plot
+
+# Set the file path to your AMRfinder output
+file_path <- "/Users/wesagee/Documents/combined_amrfinder_CA+HA_cleaned_114.txt"
+
+# Read the data from the text file
+amrfinder_data <- read_delim(file_path, delim = "\t", col_names = TRUE)
+
+# Count occurrences of each Sequence name by Origin and Name
+amr_frequency_data <- amrfinder_data %>%
+  group_by(Origin, Name, `Sequence name`) %>%
+  summarise(Frequency = n(), .groups = "drop") %>%
+  group_by(Origin, Name) %>%
+  summarise(Total_Sequence_Names = sum(Frequency), .groups = "drop")
+
+# Relabel Origin values
+amr_frequency_data <- amr_frequency_data %>%
+  mutate(Origin = recode(Origin,
+                         "CA-ESBLe" = "CA Isolates",
+                         "HA-ESBLe" = "Clinical Isolates"))
+
+# Define y-axis position for significance bracket and label
+bracket_y_position <- 31  # Raise bracket above max y-axis limit
+
+# Create violin plots with box plots, beeswarm dots, and significance annotation
+ggplot(amr_frequency_data, aes(x = Origin, y = Total_Sequence_Names, fill = Origin)) +
+  geom_violin(trim = FALSE, alpha = 0.6, width = 0.5) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.shape = NA, color = "black") +
+  geom_beeswarm(color = "black", size = 1.5, dodge.width = 0.5) +
+  stat_compare_means(method = "wilcox.test", 
+                     label = "p.signif", 
+                     comparisons = list(c("CA Isolates", "Clinical Isolates")),
+                     tip.length = 0.02,
+                     bracket.size = .85,
+                     size = 6,
+                     vjust = -0.3,
+                     y.position = bracket_y_position) +
+  labs(x = "", y = "ARG Count", title = "Total ARG Carriage") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 10, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold"),
+        legend.position = "none",
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        axis.line = element_line(color = "black")) +
+  scale_fill_manual(values = c("CA Isolates" = "#6984B3", 
+                               "Clinical Isolates" = "#FFDC64")) +
+  ylim(0, 30)  # Adjust y-axis to accommodate raised bracket
+
+-----------------------------------------------------------------------
+#Figure 5E
+#Violin plot of total Beta-lactamase gene frequency per sample
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(readr)
+
+# Set the file path to your manually selected beta-lactamase subset
+file_path <- "/Users/wesagee/Documents/combined_amrfinder_CA+HA.txt"
+
+# Read the data from the text file
+amrfinder_data <- read_delim(file_path, delim = "\t", col_names = TRUE)
+
+# Check the first few rows of the data
+head(amrfinder_data)
+
+# Filter for rows where Gene symbol starts with "bla"
+bla_data <- amrfinder_data %>%
+  filter(grepl("^bla", `Gene symbol`))
+
+# Count occurrences of each Sequence name by Origin and Name
+amr_frequency_data <- bla_data %>%
+  group_by(Origin, Name, `Sequence name`) %>%
+  summarise(Frequency = n(), .groups = "drop") %>%  # Count frequency of Sequence name
+  group_by(Origin, Name) %>%
+  summarise(Total_Sequence_Names = sum(Frequency), .groups = "drop")  # Sum frequencies per unique sample
+
+# Filter data for CA-ESBLe and HA-ESBLe
+ca_data <- amr_frequency_data %>%
+  filter(Origin == "CA-ESBLe") %>%
+  pull(Total_Sequence_Names)
+
+ha_data <- amr_frequency_data %>%
+  filter(Origin == "HA-ESBLe") %>%
+  pull(Total_Sequence_Names)
+
+# Conduct the Mann-Whitney U test
+wilcox_test <- wilcox.test(ca_data, ha_data)
+
+# Extract the p-value
+p_value <- wilcox_test$p.value
+
+# Create violin plots with boxplots for total Sequence names per unique sample
+ggplot(amr_frequency_data, aes(x = Origin, y = Total_Sequence_Names, fill = Origin)) +
+  geom_violin(trim = FALSE, alpha = 0.5, size = 1) +  # Create violin plots
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), color = "black", alpha = 0.7) +  # Add boxplots
+  geom_beeswarm(color = "black", size = 2, width = 0.2, alpha = 0.4) +  # Beeswarm plot for data points
+  labs(
+    x = "Origin", 
+    y = "Unique Gene Frequency", 
+    title = paste("Total Beta-Lactamase Genes Carriage\np-value:", signif(p_value, 3))
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 12, face = "bold"),   # Bold axis titles
+    axis.text = element_text(size = 10, face = "bold"),    # Bold axis text
+    plot.title = element_text(size = 14, face = "bold"),   # Bold plot title
+    legend.position = "none",                              # Remove legend
+    panel.border = element_rect(color = "black", fill = NA, size = 1),  # Border around the plot area
+    axis.line = element_line(color = "black")              # Add axis lines
+  ) +
+  scale_fill_manual(values = c("CA-ESBLe" = "#2F397A", "HA-ESBLe" = "#FFDC64")) +  # Use specific colors for each origin
+  ylim(0, 7)  # Set y-axis limits
+
+---------------------------------------------------------------------
+#Figure 5F
+# Percentage of blaGenotypes (blaCTX, blaTEM, blaOXA, and blaSHV)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Load the data from the specified file
+data <- read.csv("/Users/wesagee/Documents/combined_amrfinder_CA+HA_cleaned_114.txt", sep = "\t")
+
+# Clean column names by removing any extra spaces (using base R)
+colnames(data) <- gsub("^\\s+|\\s+$", "", colnames(data))
+
+# Verify the correct column names
+print(colnames(data))
+
+# Filter for gene symbols starting with blaCTX, blaTEM, blaOXA, or blaSHV
+filtered_data <- data %>%
+  filter(grepl("^blaCTX|^blaTEM|^blaOXA|^blaSHV", `Gene.symbol`))
+
+# Identify unique samples that report at least one of the bla genotypes, grouped by Origin
+samples_with_bla_by_origin <- filtered_data %>%
+  distinct(Name, Origin) %>%
+  group_by(Origin) %>%
+  summarise(samples_with_bla = n_distinct(Name), .groups = 'drop')
+
+# Calculate the total number of unique samples by Origin
+total_samples_by_origin <- data %>%
+  distinct(Name, Origin) %>%
+  group_by(Origin) %>%
+  summarise(total_unique_samples = n_distinct(Name), .groups = 'drop')
+
+# Join the two summaries to calculate the percentage by Origin
+sample_summary <- left_join(samples_with_bla_by_origin, total_samples_by_origin, by = "Origin") %>%
+  mutate(percentage_with_bla = (samples_with_bla / total_unique_samples) * 100)
+
+# Output the percentage by Origin
+print(sample_summary)
+
+# Create a new column to group the gene symbols for plotting
+filtered_data <- filtered_data %>%
+  mutate(Gene_Group = case_when(
+    grepl("^blaCTX", `Gene.symbol`) ~ "blaCTX",
+    grepl("^blaTEM", `Gene.symbol`) ~ "blaTEM",
+    grepl("^blaOXA", `Gene.symbol`) ~ "blaOXA",
+    grepl("^blaSHV", `Gene.symbol`) ~ "blaSHV",
+    TRUE ~ "Other"
+  ))
+
+# Group by Origin and Gene_Group, summarizing unique sample counts
+genotype_summary <- filtered_data %>%
+  group_by(Origin, Gene_Group) %>%
+  summarise(sample_count = n_distinct(Name), .groups = 'drop') %>%
+  left_join(total_samples_by_origin, by = "Origin") %>%
+  mutate(percentage = (sample_count / total_unique_samples) * 100)
+
+# Ensure missing combinations are filled with 0 for display purposes
+genotype_summary <- genotype_summary %>%
+  complete(Gene_Group, Origin, fill = list(sample_count = 0, percentage = 0)) %>%
+  arrange(desc(percentage))
+
+# Relabel Origin values
+genotype_summary <- genotype_summary %>%
+  mutate(Origin = recode(Origin,
+                         "CA-ESBLe" = "CA Isolates",
+                         "HA-ESBLe" = "Clinical Isolates"))
+
+# Plot the data as a bar plot with side-by-side bars for CA-ESBLe and HA-ESBLe
+ggplot(genotype_summary, aes(x = reorder(Gene_Group, -percentage), y = percentage, fill = Origin)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", width = 0.7, size = .85, alpha = .85) +
+  labs(x = "Genotypes", y = "Percent Sample (%)", title = "ESBL Genotypes") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 10, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold"),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "bold"),
+        axis.line = element_line(color = "black", size = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_fill_manual(values = c("CA Isolates" = "#6984B3", 
+                               "Clinical Isolates" = "#FFDC64")) +
+  geom_text(aes(label = round(percentage, 1)), position = position_dodge(width = 0.7), vjust = -0.5)
+
+
+--------------------------------------------------------------------
+#Figure 5G
+#Bar graph of ESBL CTX-M genotypes
+# Load necessary libraries
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Load the data from the specified file
+data <- read.csv("/Users/wesagee/Documents/combined_amrfinder_CA+HA_cleaned_114.txt", sep = "\t")
+
+# Clean column names by removing any extra spaces
+colnames(data) <- gsub("^\\s+|\\s+$", "", colnames(data))
+
+# Filter for any genes starting with "blaCTX"
+data_ctx <- data %>%
+  filter(grepl("^blaCTX-", Gene.symbol))
+
+# Aggregate the data to get unique counts of samples for each genotype and Origin
+genotype_summary <- data_ctx %>%
+  group_by(Origin, Gene.symbol) %>%
+  summarise(unique_sample_count = n_distinct(Name), .groups = 'drop') %>%
+  complete(Gene.symbol, Origin, fill = list(unique_sample_count = 0))  # Ensure missing combinations are filled with 0
+
+# Calculate the percentage of unique samples reporting each genotype by Origin
+genotype_summary <- genotype_summary %>%
+  group_by(Origin) %>%
+  mutate(percent_average = (unique_sample_count / sum(unique_sample_count)) * 100)
+
+# Filter to include only specific genotypes
+specific_genotypes <- c("blaCTX-M-14", "blaCTX-M-15", "blaCTX-M-27", "blaCTX-M-55")
+genotype_summary <- genotype_summary %>%
+  filter(Gene.symbol %in% specific_genotypes)
+
+# Relabel Origin values for better display
+genotype_summary <- genotype_summary %>%
+  mutate(Origin = recode(Origin,
+                         "CA-ESBLe" = "CA Isolates",
+                         "HA-ESBLe" = "Clinical Isolates"))
+
+# Define custom colors for the origins
+custom_colors <- c("CA Isolates" = "#6984B3", "Clinical Isolates" = "#FFDC64")
+
+# Plot the data as a bar plot with side-by-side bars for CA-ESBLe and HA-ESBLe
+ggplot(genotype_summary, aes(x = reorder(Gene.symbol, -percent_average), y = percent_average, fill = Origin)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", width = 0.7, size = .85, alpha = .85) +
+  labs(x = "CTX-M Genotype", y = "Percent Sample (%)", 
+       title = "Proportion of CTX-M Genotypes by Isolate Origin") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 10, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold"),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "bold"),
+        axis.line = element_line(color = "black", size = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_fill_manual(values = custom_colors, name = "Origin") +
+  geom_text(aes(label = round(percent_average, 1)), 
+            position = position_dodge(width = 0.7), vjust = -0.5, size = 3.5)
+
+-------------------------------------------------------------------
+#Sup Figure 6B
+#Network nodes by isolate sourcee
+#Load required libraries
+library(qgraph)
+library(igraph)
+
+# Load the SNP distance and origin data
+snp_data <- read.delim("/Users/wesagee/Documents/240103_core_pairwise_dist_CA+HA_tidy.txt")
+origin_data <- read.delim("/Users/wesagee/Documents/CA+HA_sample_origin.txt")
+
+# Ensure consistent formatting of sample names
+origin_data$sample <- as.character(origin_data$sample)
+
+# Assign networks based on SNP distance
+assign_networks <- function(snp_dists, snp_cutoff) {
+  samplelist <- unique(c(snp_dists$sample1, snp_dists$sample2))
+  networks <- data.frame(sample = samplelist, network = 0)
+  net_num <- 1
+  
+  for (i in 1:nrow(networks)) {
+    temp_snps <- snp_dists[
+      (snp_dists$sample1 == networks$sample[i] | snp_dists$sample2 == networks$sample[i]) & 
+        snp_dists$distance <= snp_cutoff, ]
+    temp_samples <- networks[networks$sample %in% unique(c(temp_snps$sample1, temp_snps$sample2)), ]
+    temp_networks <- unique(temp_samples$network)
+    
+    if (length(temp_networks[temp_networks > 0]) > 0) {
+      networks$network[networks$sample %in% temp_samples$sample] <- min(temp_networks[temp_networks > 0])
+    } else {
+      networks$network[networks$sample %in% temp_samples$sample] <- net_num
+      net_num <- net_num + 1
+    }
+  }
+  
+  networks$network[networks$network == 0] <- NA
+  return(networks)
+}
+
+# Assign networks with a 22 SNP cutoff
+network_list <- assign_networks(snp_data, 22)
+
+# Merge network and origin data
+merged_data <- merge(network_list, origin_data, by = "sample", all.x = TRUE)
+
+# Verify the merged data
+if (any(is.na(merged_data$origin))) {
+  cat("Warning: Some samples do not have an origin assigned.\n")
+  print(merged_data[is.na(merged_data$origin), ])
+}
+
+# Ensure adjacency matrix row/column names align with samples
+sample_names <- merged_data$sample
+adj_matrix <- matrix(0, nrow = length(sample_names), ncol = length(sample_names))
+rownames(adj_matrix) <- colnames(adj_matrix) <- sample_names
+
+# Populate adjacency matrix using SNP distances as edge weights (elastic link model)
+max_snp_distance <- 22  # Set max SNP distance for linking
+snp_data_filtered <- snp_data[snp_data$distance <= max_snp_distance, ]  # Filter valid links
+
+for (i in 1:nrow(snp_data_filtered)) {
+  s1 <- snp_data_filtered$sample1[i]
+  s2 <- snp_data_filtered$sample2[i]
+  dist <- snp_data_filtered$distance[i]
+  
+  # Convert distance to an elastic weight (lower distance = stronger link)
+  weight <- 1 - (dist / max_snp_distance)  # Normalize between 0 and 1
+  
+  # Assign weights to adjacency matrix
+  if (s1 %in% sample_names & s2 %in% sample_names) {
+    adj_matrix[s1, s2] <- weight
+    adj_matrix[s2, s1] <- weight  # Ensure symmetry
+  }
+}
+
+# Define colors based on "type" column
+color_map <- setNames(c("#EE2C2C", "#f8ef90", "#735324"), c("BLOOD", "URINE", "STOOL"))
+node_colors <- sapply(merged_data$type, function(x) {
+  if (!is.na(x) && x %in% names(color_map)) {
+    color_map[x]
+  } else {
+    "grey"  # Default color for samples without a matching type
+  }
+})
+
+# Verify color assignment
+cat("Node Colors by Type:\n")
+print(data.frame(Sample = merged_data$sample, Type = merged_data$type, Color = node_colors))
+
+# Plot the network with qgraph using elastic edge weights
+qgraph(
+  adj_matrix,
+  layout = "spring",
+  labels = rownames(adj_matrix),
+  color = node_colors,
+  vsize = 2.5,
+  edge.color = "grey",
+  edge.width = adj_matrix * 500,  # Scale edge thickness based on SNP distance (elastic link)
+  label.cex = 0.9,
+  directed = TRUE
+)
+
+# Add a legend
+legend(
+  "topright", 
+  legend = c("Blood", "Urine", "Stool"), 
+  col = c("#EE2C2C", "#f8ef90", "#735324"), 
+  pch = 16, # Circle symbol
+  pt.cex = 1.5, 
+  cex = 1.2, 
+  bty = "n" # No border around legend
+)
+
+# Save the merged data for verification
+write.csv(merged_data, "/Users/wesagee/Documents/250103_22snp_network_analysis_with_elastic_links.csv", row.names = FALSE)
